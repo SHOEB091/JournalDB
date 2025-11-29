@@ -1,0 +1,46 @@
+package shoebdev.JournalAPP.controller;
+
+
+import org.springframework.web.bind.annotation.*;
+import shoebdev.JournalAPP.entity.JournalEntry;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/_journal")  // this request mapping add the mapping on the class
+public class JournalEntryController {
+
+    private Map<String, JournalEntry> journalEntries = new HashMap<>();
+
+    @GetMapping//localhost:8080/journal
+    public List<JournalEntry> getAll(){
+        return new ArrayList<>(journalEntries.values());
+    }
+
+    @PostMapping // localhost:8080/journal   this should be oost request
+    public boolean createEntry(@RequestBody JournalEntry myEntry){
+        journalEntries.put(myEntry.getId(),myEntry);
+        return true;
+    }
+
+    //Path variable or Query Parameters so we use path variables
+
+    @GetMapping("id/{myId}")
+    public JournalEntry getJournalEntryById(@PathVariable String myId){
+        return journalEntries.get(myId);
+    }
+
+    @DeleteMapping("id/{myId}")
+    public JournalEntry deleteJournalEntryById(@PathVariable String myId){
+        return journalEntries.remove(myId);
+    }
+
+    @PutMapping("/id/{id}")
+    public JournalEntry updateJournalEntryById(@PathVariable String id, @RequestBody JournalEntry myEntry){
+        return journalEntries.put(id,myEntry);
+    }
+
+}
