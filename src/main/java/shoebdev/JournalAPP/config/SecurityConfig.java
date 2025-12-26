@@ -16,7 +16,7 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/public/**").permitAll()
+                .requestMatchers("/journal/**").permitAll()
                 .anyRequest().authenticated()
             )
             .formLogin(Customizer.withDefaults())
