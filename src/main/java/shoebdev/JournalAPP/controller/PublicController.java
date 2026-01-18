@@ -62,6 +62,42 @@ public class PublicController {
     }
 
     /**
+     * Register a new admin user (for testing purposes)
+     * POST /public/admin/signup
+     */
+    @PostMapping("/admin/signup")
+    public ResponseEntity<Map<String, Object>> adminSignup(@RequestBody User user) {
+        try {
+            // Check if user already exists
+            if (userService.existsByUserName(user.getUserName())) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("success", false, "message", "Username already exists"));
+            }
+
+            // Validate input
+            if (user.getUserName() == null || user.getUserName().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("success", false, "message", "Username is required"));
+            }
+
+            if (user.getPassword() == null || user.getPassword().isBlank()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("success", false, "message", "Password is required"));
+            }
+
+            // Create admin user
+            userService.saveNewAdmin(user);
+
+            return ResponseEntity.status(HttpStatus.CREATED)
+                .body(Map.of("success", true, "message", "Admin user registered successfully"));
+
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("success", false, "message", "Admin registration failed: " + e.getMessage()));
+        }
+    }
+
+    /**
      * Login user
      * POST /public/login
      */
