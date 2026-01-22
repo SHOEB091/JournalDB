@@ -23,6 +23,89 @@ The API will be available at `http://localhost:8080`
 
 ---
 
+## 🏗️ Architecture Overview
+
+### What We've Built
+This is a **Spring Boot 3.x application** using **Spring Security 6** for authentication and authorization, with **MongoDB** as the database. The app allows users to create, read, update, and delete personal journal entries, with role-based access control (USER and ADMIN roles).
+
+### Key Technologies
+- **Spring Boot 3.5.8** - Framework for building REST APIs
+- **Spring Security 6** - Authentication and authorization
+- **MongoDB** - NoSQL database for data persistence
+- **Spring Data MongoDB** - Repository layer for database operations
+- **BCrypt** - Password hashing
+- **Lombok** - Reduces boilerplate code
+
+### File Structure & Connections
+
+#### Main Application
+- **`JournalAppApplication.java`** - Entry point, bootstraps the Spring Boot app with `@SpringBootApplication` and `@EnableTransactionManagement`
+
+#### Entities (Data Models)
+- **`User.java`** - Represents users with username, password, roles, and embedded journal entries
+- **`JournalEntry.java`** - Represents journal entries with title, content, and timestamp
+
+#### Repositories (Data Access Layer)
+- **`UserRepository.java`** - Extends `MongoRepository<User, ObjectId>`, provides CRUD operations for users
+- **`JournalEntryRepository.java`** - Extends `MongoRepository<JournalEntry, ObjectId>`, provides CRUD operations for journal entries
+
+#### Services (Business Logic Layer)
+- **`UserService.java`** - Handles user operations: registration, password encoding, user lookup
+- **`JournalEntryService.java`** - Handles journal entry operations: save, find, delete
+- **`UserDetailsServiceImpl.java`** - Implements Spring Security's `UserDetailsService` for authentication
+
+#### Controllers (API Layer)
+- **`PublicController.java`** - Public endpoints: signup, login, logout, health check
+- **`UserController.java`** - User management: profile operations, admin-only user management
+- **`JournalEntryControllerV2.java`** - Journal CRUD operations with authorization checks
+- **`AdminController.java`** - Admin-only operations: user management, role updates
+- **`HealthCheck.java`** - Simple health check endpoint
+
+#### Configuration
+- **`SpringSecurity.java`** - Security configuration using Spring Security 6 style:
+  - `SecurityFilterChain` bean for HTTP security rules
+  - `AuthenticationManager` bean for authentication
+  - `PasswordEncoder` bean for password hashing
+  - Authorization rules: `/public/**` permit all, `/user/**` authenticated, `/admin/**` admin role, `/journal/**` authenticated
+
+### Data Flow
+1. **Request** → Controller
+2. **Controller** → Service (business logic)
+3. **Service** → Repository (database operations)
+4. **Repository** → MongoDB
+5. **Response** flows back through the layers
+
+### Authentication & Authorization
+
+#### Authentication (Who are you?)
+- Uses **Basic Authentication** (username/password)
+- `UserDetailsServiceImpl` loads user details from database
+- Passwords are hashed with BCrypt
+- `AuthenticationManager` validates credentials
+
+#### Authorization (What can you do?)
+- **Role-based**: USER and ADMIN roles
+- **Method-level security**: `@PreAuthorize("hasRole('ADMIN')")` on admin controller
+- **URL-level security** in `SecurityFilterChain`:
+  - `/public/**` - No authentication required
+  - `/journal/**` - Authentication required
+  - `/user/**` - Authentication required
+  - `/admin/**` - ADMIN role required
+- **Resource ownership**: Users can only access their own journal entries (unless admin)
+
+#### Security Features
+- **CSRF disabled** for API simplicity
+- **Stateless sessions** (no server-side session storage)
+- **Password encoding** with BCrypt
+- **Role-based access control** for admin operations
+- **Input validation** and error handling
+
+### Database Schema
+- **users** collection: Stores user data with embedded journal entries
+- **journalEntries** collection: Stores individual journal entries (referenced from users)
+
+---
+
 ## 📋 Complete Testing Flow
 
 Follow these steps in order to test the entire application from start to end.
@@ -474,19 +557,21 @@ GET /admin/users
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/public/health` | Health check |
+| GET | `/health-check` | Simple health check |
 | POST | `/public/signup` | User registration |
+| POST | `/public/admin/signup` | Admin user registration (for testing) |
 | POST | `/public/login` | User login |
 | POST | `/public/logout` | User logout |
 
 ### User Management (Authentication Required)
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/user/profile` | Get current user profile |
-| PUT | `/user/profile` | Update current user profile |
-| DELETE | `/user/profile` | Delete current user account |
 | GET | `/user` | Get all users (Admin only) |
+| GET | `/user/profile` | Get current user profile |
 | GET | `/user/id/{id}` | Get user by ID (Admin only) |
+| PUT | `/user/profile` | Update current user profile |
 | PUT | `/user/id/{id}` | Update user by ID (Admin only) |
+| DELETE | `/user/profile` | Delete current user account |
 | DELETE | `/user/id/{id}` | Delete user by ID (Admin only) |
 
 ### Journal Management (Authentication Required)
@@ -508,29 +593,152 @@ GET /admin/users
 | PUT | `/admin/users/{id}/role` | Update user roles |
 | DELETE | `/admin/users/{id}` | Delete user |
 
-### Special Endpoints
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/public/admin/signup` | Create admin user (for testing) |
+## 🔧 Postman Setup & Testing Guide
 
-## 🔧 Postman Setup
+### Setting Up Postman
 
-### Authentication Setup
-1. For authenticated requests, use **Basic Auth** in Postman:
-   - Username: `johndoe`
-   - Password: `securepassword123`
+1. **Download and Install Postman** from [postman.com](https://www.postman.com/downloads/)
 
-2. Or use **Authorization Header**:
-   ```
-   Authorization: Basic am9obmRvZTpzZWN1cmVwYXNzd29yZDEyMw==
-   ```
+2. **Create a New Collection**:
+   - Click "New" → "Collection"
+   - Name it "Journal App API"
+   - Add a description: "Testing the Journal App REST API"
 
-### Environment Variables
-Create these variables in Postman:
-- `base_url`: `http://localhost:8080`
-- `username`: `johndoe`
-- `password`: `securepassword123`
-- `user_id`: (save from registration response)
+3. **Set Base URL Variable**:
+   - In your collection, go to "Variables" tab
+   - Add variable: `base_url` with value `http://localhost:8080`
+
+### Authentication Setup in Postman
+
+#### Method 1: Basic Auth (Recommended)
+For each authenticated request:
+1. Go to the "Authorization" tab in your request
+2. Select "Basic Auth" from the dropdown
+3. Enter:
+   - Username: `johndoe` (or your registered username)
+   - Password: `securepassword123` (or your password)
+
+#### Method 2: Authorization Header
+Add this header manually to authenticated requests:
+```
+Authorization: Basic am9obmRvZTpzZWN1cmVwYXNzd29yZDEyMw==
+```
+*(This is base64 encoded "johndoe:securepassword123")*
+
+#### Method 3: Environment Variables (Advanced)
+1. Create environment variables:
+   - `username`: `johndoe`
+   - `password`: `securepassword123`
+   - `user_id`: (save from registration response)
+   - `auth_header`: `Basic {{username}}:{{password}}` (base64 encoded)
+
+2. In request headers, use `{{auth_header}}`
+
+### Testing Workflow in Postman
+
+#### Step 1: Health Check (No Auth)
+- **Method**: GET
+- **URL**: `{{base_url}}/public/health`
+- **Expected**: 200 OK with JSON response
+
+#### Step 2: Register User (No Auth)
+- **Method**: POST
+- **URL**: `{{base_url}}/public/signup`
+- **Headers**: `Content-Type: application/json`
+- **Body** (raw JSON):
+```json
+{
+  "userName": "johndoe",
+  "password": "securepassword123"
+}
+```
+- **Expected**: 201 Created
+
+#### Step 3: Login (No Auth)
+- **Method**: POST
+- **URL**: `{{base_url}}/public/login`
+- **Headers**: `Content-Type: application/json`
+- **Body**:
+```json
+{
+  "userName": "johndoe",
+  "password": "securepassword123"
+}
+```
+- **Expected**: 200 OK with user details
+- **Save user ID** from response for later use
+
+#### Step 4: Get Profile (Auth Required)
+- **Method**: GET
+- **URL**: `{{base_url}}/user/profile`
+- **Authorization**: Basic Auth (username/password)
+- **Expected**: 200 OK with user profile
+
+#### Step 5: Create Journal Entry (Auth Required)
+- **Method**: POST
+- **URL**: `{{base_url}}/journal/johndoe`
+- **Authorization**: Basic Auth
+- **Headers**: `Content-Type: application/json`
+- **Body**:
+```json
+{
+  "title": "My First Entry",
+  "content": "Today I learned about APIs!"
+}
+```
+- **Expected**: 201 Created with entry details
+
+#### Step 6: Get All Entries (Auth Required)
+- **Method**: GET
+- **URL**: `{{base_url}}/journal/johndoe`
+- **Authorization**: Basic Auth
+- **Expected**: 200 OK with array of entries
+
+#### Step 7: Update Entry (Auth Required)
+- **Method**: PUT
+- **URL**: `{{base_url}}/journal/johndoe/id/{entryId}`
+- **Authorization**: Basic Auth
+- **Headers**: `Content-Type: application/json`
+- **Body**:
+```json
+{
+  "title": "Updated Title",
+  "content": "Updated content"
+}
+```
+- **Expected**: 200 OK
+
+#### Step 8: Delete Entry (Auth Required)
+- **Method**: DELETE
+- **URL**: `{{base_url}}/journal/johndoe/id/{entryId}`
+- **Authorization**: Basic Auth
+- **Expected**: 200 OK
+
+#### Step 9: Test Authorization (Try accessing another user's data)
+- **Method**: GET
+- **URL**: `{{base_url}}/journal/otheruser`
+- **Authorization**: Basic Auth
+- **Expected**: 403 Forbidden or 404 Not Found
+
+#### Step 10: Admin Operations (If you have admin user)
+- First create admin user via `/public/admin/signup`
+- Then use admin credentials for `/admin/*` endpoints
+
+### Common Postman Tips
+
+1. **Save Responses**: Use Postman's "Save Response" to document expected outputs
+2. **Tests Tab**: Add JavaScript tests to validate responses automatically
+3. **Environment Variables**: Store dynamic values like user IDs and tokens
+4. **Runner**: Use Collection Runner to execute all requests in sequence
+5. **Import/Export**: Share your collection with team members
+
+### Troubleshooting in Postman
+
+- **401 Unauthorized**: Check username/password in Basic Auth
+- **403 Forbidden**: You're accessing resources you don't own (or missing admin role)
+- **404 Not Found**: Wrong URL or resource doesn't exist
+- **409 Conflict**: Username already exists during registration
+- **500 Internal Server Error**: Check server logs, database connection
 
 ---
 
